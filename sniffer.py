@@ -5,7 +5,6 @@ import os
 
 pcap_file = None
 packet_count = 0
-start_time = time.time()
 
 # HANDLING PACKETS AND INFORMATION - SECTION 1
 
@@ -91,7 +90,7 @@ def process_packet(packet, track = False, printing = True):
             and protocol of the packet, then returns it for use in process_packet func
     """
     
-    timestamp = time.strftime("%H:%M:%S", time.localtime())
+    timestamp = time.strftime("%m:%d:%y, %H:%M:%S", time.localtime())
     ethernet_info = get_ethernet_info(packet)
     ip_info = get_transport_info(packet)
     
@@ -142,6 +141,7 @@ def enable_logging(track=True, file_name="pcap_file.txt"):
     
     This function does not return anything if set to true, it is just to enable the creation of the file
     """
+    
     global pcap_file
     base_dir = os.path.dirname(__file__)
     
@@ -165,8 +165,8 @@ def close_log():
     Args: None
     
     Returns: N/A
-    
     """
+    
     global pcap_file
     if pcap_file is not None:
         pcap_file.close()
@@ -181,6 +181,7 @@ def listening_animation(stop_event):
         
     Returns: N/A
     """
+    
     dots = 0
     period = "."
     while not stop_event.is_set():
@@ -194,7 +195,7 @@ def listening_animation(stop_event):
 # PACKET SNIFFER - SECTION 3
 
 # The packet sniffer itself
-def packet_sniffer(count=0, packet_logging = True, terminal_logging = True):
+def packet_sniffer(count=0, packet_logging = True, terminal_logging = False):
     """
     Summary: The packet sniffer uses a combination of all the functions above,
     
@@ -203,7 +204,9 @@ def packet_sniffer(count=0, packet_logging = True, terminal_logging = True):
         packet_logging: a bool, determines if there is a file that keeps track of packets
         terminal_logging: a bool, decides if terminal is printing contents or not
     """
+    
     enable_logging(packet_logging)
+    start_time = time.time()
     
     try:
         stop_event = threading.Event()
@@ -225,4 +228,5 @@ def packet_sniffer(count=0, packet_logging = True, terminal_logging = True):
         
         print("\rListening Done!        ")
         print(f"{packets_sniffed} sniffed, {packet_count} packets successfully collected after {elapsed_time:.2f}s!")
-
+        packet_count = 0
+        
