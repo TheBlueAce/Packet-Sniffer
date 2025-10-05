@@ -1,4 +1,4 @@
-from scapy.all import Ether, IP, IPv6, TCP, UDP, sniff # type: ignore
+from scapy.all import Ether, IP, IPv6, TCP, UDP, sniff
 import time
 import threading
 import os
@@ -23,6 +23,7 @@ def get_ethernet_info(packet):
         dst_mac, src_mac, proto: If there is an ethernet frame, gets the destination, source,
             and ethernet type of the packet, then returns it for use in process_packet func
     """
+    
     if Ether in packet:
         dst_mac = packet[Ether].dst
         src_mac = packet[Ether].src
@@ -213,11 +214,15 @@ def packet_sniffer(count=0, packet_logging = True, terminal_logging = True):
         
         packets = sniff(prn=lambda pkt: process_packet(pkt, track=packet_logging, printing = terminal_logging), count=count)
         packets_sniffed = len(packets)
+
         
     finally:
         close_log()
         stop_event.set()
+        
         end_time = time.time()
         elapsed_time = end_time - start_time
+        
         print("\rListening Done!        ")
         print(f"{packets_sniffed} sniffed, {packet_count} packets successfully collected after {elapsed_time:.2f}s!")
+
