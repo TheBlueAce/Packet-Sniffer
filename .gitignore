@@ -1,3 +1,6 @@
 __pycache__/
 __pycache__
-pcap_file.txt
+*.pyc
+*.pcap
+*.txt
+*.csv
