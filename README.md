@@ -3,13 +3,16 @@
 
 Packet Sniffer that can be run in terminal easily.
 
-  
-
-### To start the program, run the main.py file.
+### To start the program, run the main.py file. Menu.py in progress.
 
  You can edit some of the variables as you like.
 
-**count (int)**: Set to 0 to capture as long as you don't stop the program, otherwise set to how many packets you want to sniff
+**count (int)**: Set to 0 to capture as long as you don't stop the program, otherwise set to how many packets you want to sniff<br>
+**duration (int)**: Set to 0 for infinite runtime, otherwise set to how long you want the sniffer to sniff for
+
+
+
+*Side Note*: If you have conditions for both count and duration, whichever condition is met first ends the sniffer.
 
 **packet_logging (bool)**: Set to False if you do not want to log the packets captured in a file, otherwise if True it will create a "pcap_file.txt" file and log everything in there.
 
@@ -24,3 +27,5 @@ Until a proper way to stop the program is implemented, the only way to stop snif
 &emsp;*Mac*: Command + "."
 
 WIP Project btw
+
+Planning on adding Wireshark/Splunk/Excel compatability soon. Stay updated!
