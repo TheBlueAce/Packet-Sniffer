@@ -8,9 +8,9 @@ class PacketSniffer:
         
         # User set attributes, feel free to change in code
         self.count = count
+        self.duration = duration
         self.packet_logging = packet_logging
         self.terminal_logging = terminal_logging
-        self.duration = duration
         
         # You should not change these attributes' values directly
         self._packets_sniffed = 0
@@ -23,7 +23,7 @@ class PacketSniffer:
     # For ethernet information
     def get_ethernet_info(self, packet):
         """
-        Summary: A Helper function to obtain the ethernet frame information in a packet and
+        Summary: A Helper method to obtain the ethernet frame information in a packet and
             returns it for logging purposes within process_packet
             
         Args:
@@ -46,7 +46,7 @@ class PacketSniffer:
 
     def get_transport_info(self, packet):
         """
-        Summary: A Helper function to obtain the IP information in a packet and
+        Summary: A Helper method to obtain the IP information in a packet and
             returns it for logging purposes within process_packet
             
         Args:
@@ -90,17 +90,20 @@ class PacketSniffer:
                 return src_ip, dst_ip, None, None, proto
 
 
-    def process_packet(self, packet, track = False, printing = True):
+    def process_packet(self, packet, track : bool = True, printing : bool = True):
         """
-        Summary: The main function that brings together all the data that will 
-            
+        Summary: The main method that brings together all the data that will be printed/logged, shows
+        Timestamps
+        Ethernet info
+        IP info
+        
         Args:
             packet: An IP Packet where within the header might be the source and destination IP
+            track: a bool where it checks if
 
         Returns:
-            None: If there is no IP src or dst within a packet, we move on
-            dst_ip, src_ip, proto: If there is a IP information, gets the destination, source,
-                and protocol of the packet, then returns it for use in process_packet func
+            N/A
+            Once again, this function kinda just digests information.
         """
 
         timestamp = time.strftime("%m/%d/%Y %H:%M:%S", time.localtime())
@@ -141,7 +144,7 @@ class PacketSniffer:
 
     def enable_logging(self, track=True, file_name="pcap_file.txt"):
         """
-        Summary: The function that enables file logging of packets received, opens the file in the directory that the script is ran in
+        Summary: The method that enables file logging of packets received, opens the file in the directory that the script is ran in
             Use the global variable pcap_file where the file is opened and closed, set to None initially
         Args:
             track: a boolean value that is set to True automatically, True means a file will be created and storing packets
@@ -154,7 +157,6 @@ class PacketSniffer:
         This function does not return anything if set to true, it is just to enable the creation of the file
         """
 
-        
         base_dir = os.path.dirname(__file__)
 
         if track:
@@ -168,21 +170,20 @@ class PacketSniffer:
 
     def close_log(self):
         """
-        Summary: This function is called at the end of the packet sniffer in the "finally" block, closes file if it was even open
+        Summary: This method is called at the end of the packet sniffer in the "finally" block, closes file if it was even open
 
         Args: None
 
         Returns: N/A
         """
 
-
         if self._pcap_file is not None:
             self._pcap_file.close()
 
 
-    def listening_animation(self, stop_event):
+    def listening_animation(self):
         """
-        Summary: Simply for the listening animation, used if terminal logging is off
+        Summary: Simply for the listening animation, used if terminal logging is off. Kinda cool, this is how I learn threading
 
         Args:
             stop_event: A threading event used to act as a flag for the function to run, while it is not set then this will run
@@ -198,11 +199,27 @@ class PacketSniffer:
             if (dots % 4 == 0):
                 dots = 0
             
-            time.sleep(2)
+            time.sleep(1)
+
+    def sniffing_duration(self):
+        """
+        Summary: This is to make the sniffer stop after x seconds. Sets the stop flag after x seconds
+                 Works by running the loop for the duration set by user, for every check, sees if
+                 the flag was set, if so then just exit the function
+                 if reaches the bottom before flag is set, sets it here
+        Args: N/A
+        
+        Returns: _
+        """
+        for _ in range(self.duration):
+            if self._stop_event.is_set():
+                return
+            time.sleep(0.5)
+        
+        self._stop_event.set()
 
     # PACKET SNIFFER - SECTION 3
 
-    # The packet sniffer itself
     def start(self):
         """
         Summary: The method used to start the packet sniffer is in here
@@ -210,6 +227,7 @@ class PacketSniffer:
 
         Args:
             count: an int, determines how many packets you track, for infinite leave as is or 0
+            duration: an int, determines how long (in seconds) the sniffer runs for. If 0, runs infinitely
             packet_logging: a bool, determines if there is a file that keeps track of packets
             terminal_logging: a bool, decides if terminal is printing contents or not
         """
@@ -219,24 +237,38 @@ class PacketSniffer:
 
         try:
             self._stop_event = threading.Event()
-            animation = threading.Thread(target=self.listening_animation, args=(self._stop_event,))
+            animation = threading.Thread(target=self.listening_animation)
+            timer = threading.Thread(target=self.sniffing_duration)
             
             if not self.terminal_logging:
                 animation.start()
+                
+            if self.duration != 0:
+                timer.start()
             
-            packets = sniff(prn=lambda pkt: self.process_packet(pkt, track=self.packet_logging, printing = self.terminal_logging), count=self.count)
+            # prn = pkt, basically the packet passes into process packet then it gets "digested"
+            # count = how many packets you want
+            # stop_filter = stop once the stop event flag is set
+            
+            packets = sniff(prn=lambda pkt: self.process_packet(pkt, track=self.packet_logging, printing = self.terminal_logging),
+                            count=self.count,
+                            stop_filter= lambda _: self._stop_event.is_set()
+                            )
+            
+            self._stop_event.set()
             self._packets_sniffed = len(packets)
 
-            
         finally:
             self.close_log()
             self._stop_event.set()
+            
             animation.join()
+            timer.join()
             
             end_time = time.time()
             elapsed_time = end_time - start_time
             
             print("\rListening Done!        ")
-            print("Results this session")
+            print("Results this session...")
             print(f"{self._packets_sniffed} sniffed, {self._packet_count} packets successfully collected after {elapsed_time:.2f}s!")
         

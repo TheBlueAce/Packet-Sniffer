@@ -1,6 +1,7 @@
 import sniffer
 
 def main_menu():
+    packet_sniffer = sniffer.PacketSniffer(count=0, packet_logging = True, terminal_logging=False)
     
     while True:
         try:
@@ -14,7 +15,7 @@ def main_menu():
             print("5. Quit!")
             user_input = int(input("I would like to... "))
             if user_input == 1:
-                sniffer.packet_sniffer()
+                packet_sniffer.start()
                 
             elif user_input in [2,3,4]:
                 print()
