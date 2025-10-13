@@ -2,6 +2,7 @@ from scapy.all import Ether, IP, IPv6, TCP, UDP, sniff
 import time
 import threading
 import os
+
 class PacketSniffer:
 
     def __init__(self, count: int = 0, duration: int = 0, packet_logging: bool = True, terminal_logging: bool = False):
@@ -214,7 +215,7 @@ class PacketSniffer:
         for _ in range(self.duration):
             if self._stop_event.is_set():
                 return
-            time.sleep(0.5)
+            time.sleep(1)
         
         self._stop_event.set()
 
@@ -261,9 +262,11 @@ class PacketSniffer:
         finally:
             self.close_log()
             self._stop_event.set()
-            
-            animation.join()
-            timer.join()
+            if not self.terminal_logging:
+                animation.join()
+                
+            if self.duration != 0:
+                timer.join()
             
             end_time = time.time()
             elapsed_time = end_time - start_time
