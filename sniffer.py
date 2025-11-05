@@ -21,7 +21,6 @@ class PacketSniffer:
         
     # HANDLING PACKETS AND INFORMATION - SECTION 1
     
-    # For ethernet information
     def get_ethernet_info(self, packet):
         """
         Summary: A Helper method to obtain the ethernet frame information in a packet and
@@ -205,17 +204,21 @@ class PacketSniffer:
     def sniffing_duration(self):
         """
         Summary: This is to make the sniffer stop after x seconds. Sets the stop flag after x seconds
-                 Works by running the loop for the duration set by user, for every check, sees if
-                 the flag was set, if so then just exit the function
-                 if reaches the bottom before flag is set, sets it here
         Args: N/A
         
         Returns: _
         """
-        for _ in range(self.duration):
+        interval = max(0.1, self.duration / 300)
+        start_time = time.monotonic()
+        while time.monotonic() - start_time < self.duration:
+            
+            elapsed = time.monotonic() - start_time
+            remaining = self.duration - elapsed
+            
             if self._stop_event.is_set():
                 return
-            time.sleep(1)
+            
+            time.sleep(min(interval, remaining))
         
         self._stop_event.set()
 
@@ -234,7 +237,7 @@ class PacketSniffer:
         """
         
         self.enable_logging(self.packet_logging)
-        start_time = time.time()
+        start_time = time.monotonic()
 
         try:
             self._stop_event = threading.Event()
@@ -268,7 +271,7 @@ class PacketSniffer:
             if self.duration != 0:
                 timer.join()
             
-            end_time = time.time()
+            end_time = time.monotonic()
             elapsed_time = end_time - start_time
             
             print("\rListening Done!        ")
