@@ -163,13 +163,9 @@ class PacketSniffer:
             return
         
         base_dir = os.path.dirname(__file__)
-
-        base_dir = os.path.dirname(__file__)
         full_file = os.path.join(base_dir, f"{self.file_name}{self.ext}")
         
         file_instances = 1
-        
-        print(f"File will be saved at: {os.path.abspath(full_file)}")
         
         while os.path.exists(full_file):
             full_file = os.path.join(base_dir, f"{self.file_name}({file_instances}){self.ext}")
@@ -219,7 +215,7 @@ class PacketSniffer:
         
         Returns: _
         """
-        interval = max(0.1, self.duration / 300)
+        interval = max(0.02, self.duration / 300)
         start_time = time.monotonic()
         while time.monotonic() - start_time < self.duration:
             
@@ -288,4 +284,4 @@ class PacketSniffer:
             print("\rListening Done!        ")
             print("Results this session...")
             print(f"{self._packets_sniffed} sniffed, {self._packet_count} packets successfully collected after {elapsed_time:.2f}s!")
-        
+            self._packet_count = 0 # For if the user wanted to run the packet sniffer again

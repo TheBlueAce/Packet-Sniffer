@@ -44,8 +44,9 @@ def main_menu():
             print("--------------------------")
             print("1. .txt")
             print("2. .csv")
-            print("3. .pcap\n")
-            print("4. Back to main menu")
+            print("3. .pcap")
+            print("4. Change file name")
+            print("5. Back to main menu\n")
             choice = input("Select format: ")
             if choice == "1":
                 packet_sniffer.ext = ".txt"
@@ -53,12 +54,17 @@ def main_menu():
                 packet_sniffer.ext = ".csv"
             elif choice == "3":
                 packet_sniffer.ext = ".pcap"
-            elif choice == "4" or choice.lower() == "q":
+            elif choice == "4":
+                print("What name do you want to name the file?")
+                new_file_name = input()
+                packet_sniffer.file_name = new_file_name
+                
+            elif choice == "5" or choice.lower() == "q":
                 break
             else:
                 print("Invalid choice, try again!")
                 
-            print(f"File format is {packet_sniffer.ext}")
+            print(f"File is {packet_sniffer.file_name}{packet_sniffer.ext}")
             input("\nPress Enter to continue...")
 
     def view_files_menu():
@@ -69,7 +75,10 @@ def main_menu():
             print("No files created yet.")
         else:
             for f in files_created:
-                print(f" - {f}")
+                current_file = os.path.basename(f)
+                print(f"File name - {current_file}")
+                print(f"Path - {f}")
+                print()
         input("\nPress Enter to return...")
 
     
