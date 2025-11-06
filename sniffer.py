@@ -5,19 +5,22 @@ import os
 
 class PacketSniffer:
 
-    def __init__(self, count: int = 0, duration: int = 0, packet_logging: bool = True, terminal_logging: bool = False):
+    def __init__(self, count: int = 0, duration: int = 0, packet_logging: bool = True, terminal_logging: bool = False, file_name: str = "pcap_file", ext: str = ".txt"):
         
         # User set attributes, feel free to change in code
         self.count = count
         self.duration = duration
         self.packet_logging = packet_logging
         self.terminal_logging = terminal_logging
+        self.file_name = file_name
+        self.ext = ext
         
         # You should not change these attributes' values directly
         self._packets_sniffed = 0
         self._packet_count = 0
         self._pcap_file = None
         self._stop_event = None
+        self._prev_file = None
         
     # HANDLING PACKETS AND INFORMATION - SECTION 1
     
@@ -142,7 +145,7 @@ class PacketSniffer:
 
     # LOGGING FUNCTIONS - SECTION 2
 
-    def enable_logging(self, track=True, file_name="pcap_file.txt"):
+    def enable_logging(self, track=True):
         """
         Summary: The method that enables file logging of packets received, opens the file in the directory that the script is ran in
             Use the global variable pcap_file where the file is opened and closed, set to None initially
@@ -156,17 +159,25 @@ class PacketSniffer:
 
         This function does not return anything if set to true, it is just to enable the creation of the file
         """
-
+        if not track:
+            return
+        
         base_dir = os.path.dirname(__file__)
 
-        if track:
-            base_dir = os.path.dirname(__file__)
-            file_name = os.path.join(base_dir, "pcap_file.txt")
-            print(f"File will be saved at: {os.path.abspath(file_name)}")
-            
-            self._pcap_file = open(file_name, "w")
-            self._pcap_file.write("Save Packet details before running again!\nOtherwise, data will be lost upon running again!\n\n")
+        base_dir = os.path.dirname(__file__)
+        full_file = os.path.join(base_dir, f"{self.file_name}{self.ext}")
         
+        file_instances = 1
+        
+        print(f"File will be saved at: {os.path.abspath(full_file)}")
+        
+        while os.path.exists(full_file):
+            full_file = os.path.join(base_dir, f"{self.file_name}({file_instances}){self.ext}")
+            file_instances += 1
+            
+        self._pcap_file = open(full_file, "w")
+        self._pcap_file.write("Save Packet details before running again!\nOtherwise, data will be lost upon running again!\n\n")
+        self._prev_file = full_file
 
     def close_log(self):
         """
