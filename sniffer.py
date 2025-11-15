@@ -1,7 +1,9 @@
 from scapy.all import Ether, IP, IPv6, TCP, UDP, sniff
+from scapy.utils import PcapWriter
 import time
 import threading
 import os
+import csv
 
 class PacketSniffer:
 
@@ -18,9 +20,11 @@ class PacketSniffer:
         # You should not change these attributes' values directly
         self._packets_sniffed = 0
         self._packet_count = 0
+        self._captured_packets = []
         self._pcap_file = None
         self._stop_event = None
         self._prev_file = None
+        self._csv_writer = None
         
     # HANDLING PACKETS AND INFORMATION - SECTION 1
     
@@ -95,10 +99,8 @@ class PacketSniffer:
 
     def process_packet(self, packet, track : bool = True, printing : bool = True):
         """
-        Summary: The main method that brings together all the data that will be printed/logged, shows
-        Timestamps
-        Ethernet info
-        IP info
+        Summary: The main method that brings together all the data that will be printed/logged, the funcation that
+                the packet is passed to
         
         Args:
             packet: An IP Packet where within the header might be the source and destination IP
@@ -112,43 +114,65 @@ class PacketSniffer:
         timestamp = time.strftime("%m/%d/%Y %H:%M:%S", time.localtime())
         ethernet_info = self.get_ethernet_info(packet)
         ip_info = self.get_transport_info(packet)
-
-        if ethernet_info is not None:
-            dst_mac, src_mac, ether_proto = ethernet_info
-            ethernet_data = f"[{timestamp}] Ethernet | DST = {dst_mac}, SRC = {src_mac}, EtherType = {ether_proto}"
-            
-            if printing:
-                print(ethernet_data)
-            if track and self._pcap_file is not None:
-                self._pcap_file.write(ethernet_data + "\n")
-                self._pcap_file.flush()
-
-        if ip_info is not None:
+        
+        if ip_info:
             src_ip, dst_ip, src_port, dst_port, ip_proto = ip_info
-            ip_data = f"[{timestamp}] IP Info | Proto = {ip_proto}, SRC = {src_ip} : {src_port} -> DST = {dst_ip} : {dst_port}"
+        else:
+            src_ip = dst_ip = src_port = dst_port = ip_proto = None
+
+        if ethernet_info:
+            dst_mac, src_mac, ether_proto = ethernet_info
+        else:
+            dst_mac = src_mac = ether_proto = None
             
-            if printing:
-                print(ip_data)
+        if self.ext == ".csv" and ip_info and ethernet_info:
+            self._csv_writer.writerow([
+                timestamp, ip_proto, src_ip, src_port, dst_ip, dst_port, src_mac, dst_mac, ether_proto
+            ])
+            self._pcap_file.flush()
+            return
+        
+        elif self.ext == ".pcap":
+            if self._pcap_writer is not None:
+                self._pcap_writer.write(packet)
+            return
+        
+        else: #.txt handling
+            if printing and ethernet_info:
+                print(f"[{timestamp}] Ethernet | DST = {dst_mac}, SRC = {src_mac}, EtherType = {ether_proto}")
+            elif printing and not ethernet_info:
+                print("Ethernet info for this packet was lost!")
                 
-            if track and self._pcap_file is not None:
-                self._pcap_file.write(ip_data + "\n")
+            if printing and ip_info:
+                print(f"[{timestamp}] IP Info | Proto = {ip_proto}, SRC = {src_ip}:{src_port} -> DST = {dst_ip}:{dst_port}")
+            elif printing and not ip_info:
+                print("IP info for this packet was lost!")
+                
+            if self._pcap_file is not None:
+                if ethernet_info:
+                    self._pcap_file.write(f"[{timestamp}] Ethernet | DST = {dst_mac}, SRC = {src_mac}, EtherType = {ether_proto}\n")
+                else:
+                    self._pcap_file.write("Ethernet info for this packet was lost!")
+                    
+                if ip_info:
+                    self._pcap_file.write(f"[{timestamp}] IP Info | Proto = {ip_proto}, SRC = {src_ip}:{src_port} -> DST = {dst_ip}:{dst_port}\n")
+                else:
+                    self._pcap_file.write("IP info for this packet was lost!")
+                    
+                self._pcap_file.write("\n")
                 self._pcap_file.flush()
-                
-        if track and self._pcap_file is not None:
-            self._pcap_file.write("\n") 
-            
+                    
+                if printing:
+                    print()
+                    
         if ip_info is not None and ethernet_info is not None:
-            self._packet_count += 1
-            
-        if printing:
-            print()
+                    self._packet_count += 1
 
     # LOGGING FUNCTIONS - SECTION 2
 
     def enable_logging(self, track=True):
         """
-        Summary: The method that enables file logging of packets received, opens the file in the directory that the script is ran in
-            Use the global variable pcap_file where the file is opened and closed, set to None initially
+        Summary: The method that enables file logging of packets received, handles csv, pcap, and txt file formats
         Args:
             track: a boolean value that is set to True automatically, True means a file will be created and storing packets
             if false, has no file
@@ -170,11 +194,24 @@ class PacketSniffer:
         while os.path.exists(full_file):
             full_file = os.path.join(base_dir, f"{self.file_name}({file_instances}){self.ext}")
             file_instances += 1
-            
-        self._pcap_file = open(full_file, "w")
-        self._pcap_file.write("Save Packet details before running again!\nOtherwise, data will be lost upon running again!\n\n")
+        
         self._prev_file = full_file
 
+        if self.ext == ".csv":
+            self._pcap_file = open(full_file, "w", newline="")
+            self._csv_writer = csv.writer(self._pcap_file)
+            self._csv_writer.writerow([
+                "Timestamp", "Protocol", "Source IP", "Source Port",
+                "Destination IP", "Destination Port", "Source MAC", 
+                "Destination MAC", "EtherType"
+            ])
+        elif self.ext == ".pcap":
+            self._pcap_writer = PcapWriter(full_file, append=False, sync=True)
+            self._pcap_file = None
+        else: # .txt
+            self._pcap_file = open(full_file, "w")
+            self._pcap_file.write("Packet capture log\n\n")
+    
     def close_log(self):
         """
         Summary: This method is called at the end of the packet sniffer in the "finally" block, closes file if it was even open
@@ -183,10 +220,13 @@ class PacketSniffer:
 
         Returns: N/A
         """
-
         if self._pcap_file is not None:
-            self._pcap_file.close()
-
+                self._pcap_file.close()
+                self._pcap_file = None
+        if hasattr(self, "_pcap_writer") and self._pcap_writer is not None:
+            self._pcap_writer.close()
+            self._pcap_writer = None
+            
 
     def listening_animation(self):
         """
