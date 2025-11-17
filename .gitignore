@@ -4,4 +4,3 @@ __pycache__
 *.pcap
 *.txt
 *.csv
-test.py

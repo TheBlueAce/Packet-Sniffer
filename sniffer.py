@@ -1,12 +1,29 @@
 from scapy.all import Ether, IP, IPv6, TCP, UDP, sniff
 from scapy.utils import PcapWriter
+from scapy.layers.inet import TCP, UDP, ICMP 
+from scapy.layers.inet6 import IPv6
+from scapy.layers.sctp import SCTP
 import time
 import threading
 import os
 import csv
 
 class PacketSniffer:
-
+    
+    PROTO_TABLE = {
+        1: "ICMP",          # Internet Control Message Protocol (IPv4)
+        2: "IGMP",          # Internet Group Management Protocol
+        6: "TCP",           # Transmission Control Protocol
+        17: "UDP",          # User Datagram Protocol
+        41: "IPv6 Encapsulation",
+        47: "GRE",          # Generic Routing Encapsulation
+        50: "ESP",          # Encapsulating Security Payload
+        51: "AH",           # Authentication Header
+        58: "ICMPv6",       # Internet Control Message Protocol (IPv6)
+        89: "OSPF",         # Open Shortest Path First
+        132: "SCTP"         # Stream Control Transmission Protocol
+    }
+    
     def __init__(self, count: int = 0, duration: int = 0, packet_logging: bool = True, terminal_logging: bool = False, file_name: str = "pcap_file", ext: str = ".txt"):
         
         # User set attributes, feel free to change in code
@@ -67,8 +84,9 @@ class PacketSniffer:
 
         # Table for referencing well known protocols
         proto_table = {
-            6: (TCP, "TCP"),
-            17: (UDP, "UDP")
+            6:   (TCP, "TCP"),
+            17:  (UDP, "UDP"),
+            132: (SCTP, "SCTP"),
         }
 
         ip_layer = IP if IP in packet else IPv6 if IPv6 in packet else None
@@ -110,66 +128,126 @@ class PacketSniffer:
             N/A
             Once again, this function kinda just digests information.
         """
-
-        timestamp = time.strftime("%m/%d/%Y %H:%M:%S", time.localtime())
-        ethernet_info = self.get_ethernet_info(packet)
-        ip_info = self.get_transport_info(packet)
-        
-        if ip_info:
-            src_ip, dst_ip, src_port, dst_port, ip_proto = ip_info
-        else:
-            src_ip = dst_ip = src_port = dst_port = ip_proto = None
-
-        if ethernet_info:
-            dst_mac, src_mac, ether_proto = ethernet_info
-        else:
-            dst_mac = src_mac = ether_proto = None
+        try:
+            timestamp = time.strftime("%m/%d/%Y %H:%M:%S", time.localtime())
+            ethernet_info = self.get_ethernet_info(packet)
+            ip_info = self.get_transport_info(packet)
             
-        if self.ext == ".csv" and ip_info and ethernet_info:
-            self._csv_writer.writerow([
-                timestamp, ip_proto, src_ip, src_port, dst_ip, dst_port, src_mac, dst_mac, ether_proto
-            ])
-            self._pcap_file.flush()
-            return
+            ethernet_data = ip_data = None
         
-        elif self.ext == ".pcap":
-            if self._pcap_writer is not None:
-                self._pcap_writer.write(packet)
+            # getting ethernet obv
+            if ethernet_info:
+                dst_mac, src_mac, ether_proto = ethernet_info
+                ethernet_data = f"[{timestamp}] Ethernet | DST = {dst_mac}, SRC = {src_mac}, EtherType = {ether_proto}"
+            else:
+                dst_mac = src_mac = ether_proto = None
+            
+            # a little complicated here so comments for myself
+            if ip_info:
+                src_ip, dst_ip, src_port, dst_port, ip_proto = ip_info
+                
+                # this part was cuz ip protocol num might be a str or int cuz scapy is weird
+                if isinstance(ip_proto, str):
+                    
+                    # if its a string we can try to format it properly
+                    # try to find the numeric code that matches this label
+                    proto_num = next((num for num, name in self.PROTO_TABLE.items() if name == ip_proto), None)
+                    if proto_num is not None:
+                        proto_display = f"{ip_proto} ({proto_num})"
+                    else:
+                        proto_display = ip_proto
+                else:
+                    # otherwise, look it up in our class proto table. Then its cool to display
+                    proto_name = self.PROTO_TABLE.get(ip_proto, "Unknown")
+                    proto_display = f"{proto_name} ({ip_proto})"
+                    
+                # diff protos have different displays, make it consistent (ICP and ICMP ex.)
+                src_repr = f"{src_ip}:{src_port}" if src_port is not None else src_ip
+                dst_repr = f"{dst_ip}:{dst_port}" if dst_port is not None else dst_ip
+                
+                ip_data = f"[{timestamp}] IP Info | Proto = {proto_display}, SRC = {src_repr} -> DST = {dst_repr}"
+            else:
+                src_ip = dst_ip = src_port = dst_port = ip_proto = None
+            
+            if printing:
+                self.print_data(ethernet_data, ip_data)
+                
+            if ip_info is not None and ethernet_info is not None:
+                self._packet_count += 1
+                        
+            if track: # if we even want a log file
+                
+                if self.ext == ".csv" and ip_info and ethernet_info: #.csv
+                    
+                    # normalize protocol name again for CSV output
+                    if isinstance(ip_proto, str):
+                        # Try to map the label back to a number
+                        proto_num = next((num for num, name in self.PROTO_TABLE.items()
+                                        if name == ip_proto), None)
+                        if proto_num is not None:
+                            proto_display = f"{ip_proto} ({proto_num})"
+                        else:
+                            proto_display = ip_proto
+                    else:
+                        proto_name = self.PROTO_TABLE.get(ip_proto, "Unknown")
+                        proto_display = f"{proto_name} ({ip_proto})"
+
+                    # make sure blank cells stay blank instead of showing "None"
+                    src_port = src_port if src_port is not None else ""
+                    dst_port = dst_port if dst_port is not None else ""
+                    
+                    self._csv_writer.writerow([
+                        timestamp,
+                        proto_display,
+                        src_ip,
+                        src_port,
+                        dst_ip,
+                        dst_port,
+                        src_mac,
+                        dst_mac,
+                        ether_proto
+                    ])
+                    self._pcap_file.flush()
+                    return
+                
+                elif self.ext == ".pcap": #.pcap obv
+                    if self._pcap_writer is not None:
+                        self._pcap_writer.write(packet)
+                    return
+                
+                else: #.txt handling
+                        
+                    if self._pcap_file is not None:
+                        if ethernet_info:
+                            self._pcap_file.write(ethernet_data + "\n")
+                        else:
+                            self._pcap_file.write("Ethernet info for this packet was lost!\n")
+                            
+                        if ip_info:
+                            self._pcap_file.write(ip_data + "\n")
+                        else:
+                            self._pcap_file.write("IP info for this packet was lost!\n")
+                            
+                        self._pcap_file.write("\n")
+                        self._pcap_file.flush()
+        except Exception as e:
+            print(f"[DEBUG] Failed to process packet: {e}")
             return
-        
-        else: #.txt handling
-            if printing and ethernet_info:
-                print(f"[{timestamp}] Ethernet | DST = {dst_mac}, SRC = {src_mac}, EtherType = {ether_proto}")
-            elif printing and not ethernet_info:
-                print("Ethernet info for this packet was lost!")
-                
-            if printing and ip_info:
-                print(f"[{timestamp}] IP Info | Proto = {ip_proto}, SRC = {src_ip}:{src_port} -> DST = {dst_ip}:{dst_port}")
-            elif printing and not ip_info:
-                print("IP info for this packet was lost!")
-                
-            if self._pcap_file is not None:
-                if ethernet_info:
-                    self._pcap_file.write(f"[{timestamp}] Ethernet | DST = {dst_mac}, SRC = {src_mac}, EtherType = {ether_proto}\n")
-                else:
-                    self._pcap_file.write("Ethernet info for this packet was lost!")
-                    
-                if ip_info:
-                    self._pcap_file.write(f"[{timestamp}] IP Info | Proto = {ip_proto}, SRC = {src_ip}:{src_port} -> DST = {dst_ip}:{dst_port}\n")
-                else:
-                    self._pcap_file.write("IP info for this packet was lost!")
-                    
-                self._pcap_file.write("\n")
-                self._pcap_file.flush()
-                    
-                if printing:
-                    print()
-                    
-        if ip_info is not None and ethernet_info is not None:
-                    self._packet_count += 1
+            
+                        
 
     # LOGGING FUNCTIONS - SECTION 2
-
+    
+    def print_data(self, ethernet_data, ip_data):
+        
+        if ethernet_data:
+            print(ethernet_data)
+            
+        if ip_data:
+            print(ip_data)
+                
+        print()
+        
     def enable_logging(self, track=True):
         """
         Summary: The method that enables file logging of packets received, handles csv, pcap, and txt file formats
@@ -246,7 +324,7 @@ class PacketSniffer:
             if (dots % 4 == 0):
                 dots = 0
             
-            time.sleep(1)
+            self._stop_event.wait(timeout=1)
 
     def sniffing_duration(self):
         """
@@ -255,17 +333,22 @@ class PacketSniffer:
         
         Returns: _
         """
-        interval = max(0.02, self.duration / 300)
         start_time = time.monotonic()
-        while time.monotonic() - start_time < self.duration:
+        interval = 0.02
+        
+        while True:
             
             elapsed = time.monotonic() - start_time
+            
+            if elapsed >= self.duration:
+                break
+        
             remaining = self.duration - elapsed
+            if remaining < 0:
+                break
             
-            if self._stop_event.is_set():
+            if self._stop_event.wait(timeout=min(interval,remaining)):
                 return
-            
-            time.sleep(min(interval, remaining))
         
         self._stop_event.set()
 
@@ -310,6 +393,15 @@ class PacketSniffer:
             self._packets_sniffed = len(packets)
 
         finally:
+            # just adding the final line in a .csv if it is a .csv file, idk where else to place it
+            if self.ext == ".csv" and self._pcap_file is not None:
+                try:
+                    self._csv_writer.writerow([])
+                    self._csv_writer.writerow(["Summary", f"Total Packets: {self._packet_count}"])
+                    self._pcap_file.flush()
+                except Exception as e:
+                    print(f"Error: could not write summary row ({e})")
+                    
             self.close_log()
             self._stop_event.set()
             if not self.terminal_logging:
@@ -324,4 +416,7 @@ class PacketSniffer:
             print("\rListening Done!        ")
             print("Results this session...")
             print(f"{self._packets_sniffed} sniffed, {self._packet_count} packets successfully collected after {elapsed_time:.2f}s!")
+            
+            
+                    
             self._packet_count = 0 # For if the user wanted to run the packet sniffer again
