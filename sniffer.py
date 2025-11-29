@@ -24,7 +24,7 @@ class PacketSniffer:
         132: "SCTP"         # Stream Control Transmission Protocol
     }
     
-    def __init__(self, count: int = 0, duration: int = 0, packet_logging: bool = True, terminal_logging: bool = False, file_name: str = "pcap_file", ext: str = ".txt"):
+    def __init__(self, count: int = 0, duration: int = 0, packet_logging: bool = True, terminal_logging: bool = False, file_name: str = "pcap_file", ext: str = ".txt", filter_str: str = None):
         
         # User set attributes, feel free to change in code
         self.count = count
@@ -33,15 +33,16 @@ class PacketSniffer:
         self.terminal_logging = terminal_logging
         self.file_name = file_name
         self.ext = ext
+        self.filter_str = filter_str
         
         # You should not change these attributes' values directly
-        self._packets_sniffed = 0
-        self._packet_count = 0
-        self._captured_packets = []
-        self._pcap_file = None
-        self._stop_event = None
-        self._prev_file = None
-        self._csv_writer = None
+        self._packets_sniffed = 0    # Total packets seen by sniff() (including those not logged)
+        self._packet_count = 0       # Number of packets successfully processed and counted/logged
+        self._captured_packets = []  # In-memory list to store captured packets if needed (unused by default)
+        self._pcap_file = None       # File handle for .txt/.csv logging (None when no log is open)
+        self._stop_event = None      # threading.Event used to signal threads (animation) to stop
+        self._prev_file = None       # Path to the most recently created log file
+        self._csv_writer = None      # csv.writer instance used when logging to CSV
         
     # HANDLING PACKETS AND INFORMATION - SECTION 1
     
@@ -250,16 +251,17 @@ class PacketSniffer:
         
     def enable_logging(self, track=True):
         """
-        Summary: The method that enables file logging of packets received, handles csv, pcap, and txt file formats
-        Args:
-            track: a boolean value that is set to True automatically, True means a file will be created and storing packets
-            if false, has no file
-
-        Returns:
-            None: If track is set to false
-            Otherwise: N/A
-
-        This function does not return anything if set to true, it is just to enable the creation of the file
+        Summary: Initializes file logging for packet capture with support for CSV, PCAP, and TXT formats. 
+        Creates a new file with an incremented filename if a file already exists.
+        
+        
+        Args: track (bool): A boolean flag to enable or disable file logging. Defaults to True. When True, creates and initializes a log file; 
+            when False, returns immediately without creating any file.
+        
+        Returns: None, This method does not return any value. It configures internal file handles and writers as side effects.
+        
+        Quick Note: The method automatically handles file naming conflicts by appending an incremented counter to the filename (e.g., filename(1), filename(2)). 
+        The file format (CSV, PCAP, or TXT) is determined by the instance's `self.ext` attribute and initializes the appropriate writer accordingly.
         """
         if not track:
             return
@@ -326,32 +328,6 @@ class PacketSniffer:
             
             self._stop_event.wait(timeout=1)
 
-    def sniffing_duration(self):
-        """
-        Summary: This is to make the sniffer stop after x seconds. Sets the stop flag after x seconds
-        Args: N/A
-        
-        Returns: _
-        """
-        start_time = time.monotonic()
-        interval = 0.02
-        
-        while True:
-            
-            elapsed = time.monotonic() - start_time
-            
-            if elapsed >= self.duration:
-                break
-        
-            remaining = self.duration - elapsed
-            if remaining < 0:
-                break
-            
-            if self._stop_event.wait(timeout=min(interval,remaining)):
-                return
-        
-        self._stop_event.set()
-
     # PACKET SNIFFER - SECTION 3
 
     def start(self):
@@ -372,27 +348,33 @@ class PacketSniffer:
         try:
             self._stop_event = threading.Event()
             animation = threading.Thread(target=self.listening_animation)
-            timer = threading.Thread(target=self.sniffing_duration)
             
             if not self.terminal_logging:
                 animation.start()
-                
-            if self.duration != 0:
-                timer.start()
             
             # prn = pkt, basically the packet passes into process packet then it gets "digested"
             # count = how many packets you want
-            # stop_filter = stop once the stop event flag is set
+            # timeout = the actual supported timeout function by scapy
+            # 
             
             packets = sniff(prn=lambda pkt: self.process_packet(pkt, track=self.packet_logging, printing = self.terminal_logging),
                             count=self.count,
-                            stop_filter= lambda _: self._stop_event.is_set()
+                            timeout=self.duration if self.duration>0 else None,
+                            filter=self.filter_str,
+                            store=0
                             )
+            self._packets_sniffed = self._packet_count
+            
+        except Exception as e:
+            print(f"\nError during sniffing: {e}")
+            
+        finally:
             
             self._stop_event.set()
-            self._packets_sniffed = len(packets)
-
-        finally:
+            
+            if animation.is_alive():
+                animation.join()
+            
             # just adding the final line in a .csv if it is a .csv file, idk where else to place it
             if self.ext == ".csv" and self._pcap_file is not None:
                 try:
@@ -403,12 +385,6 @@ class PacketSniffer:
                     print(f"Error: could not write summary row ({e})")
                     
             self.close_log()
-            self._stop_event.set()
-            if not self.terminal_logging:
-                animation.join()
-                
-            if self.duration != 0:
-                timer.join()
             
             end_time = time.monotonic()
             elapsed_time = end_time - start_time
@@ -417,6 +393,4 @@ class PacketSniffer:
             print("Results this session...")
             print(f"{self._packets_sniffed} sniffed, {self._packet_count} packets successfully collected after {elapsed_time:.2f}s!")
             
-            
-                    
             self._packet_count = 0 # For if the user wanted to run the packet sniffer again
