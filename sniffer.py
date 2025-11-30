@@ -7,6 +7,7 @@ import time
 import threading
 import os
 import csv
+import sys
 
 class PacketSniffer:
     
@@ -266,7 +267,14 @@ class PacketSniffer:
         if not track:
             return
         
-        base_dir = os.path.dirname(__file__)
+        # Check if we are a compiled EXE ("frozen")
+        if getattr(sys, "frozen", False):
+            # If .exe: use the folder where the .exe is located
+            base_dir = os.path.dirname(sys.executable)
+        else:
+            # If script: use the folder where the .py file is located
+            base_dir = os.path.dirname(__file__)
+        
         full_file = os.path.join(base_dir, f"{self.file_name}{self.ext}")
         
         file_instances = 1
@@ -389,7 +397,13 @@ class PacketSniffer:
             end_time = time.monotonic()
             elapsed_time = end_time - start_time
             
-            print("\rListening Done!        ")
+            if self.terminal_logging:
+                # If we were scrolling text, just print a clean new line
+                print("\nListening Done!")
+            else:
+                # If we were animating dots, overwrite them with \r
+                print("\rListening Done!            ")
+                
             print("Results this session...")
             print(f"{self._packets_sniffed} sniffed, {self._packet_count} packets successfully collected after {elapsed_time:.2f}s!")
             
