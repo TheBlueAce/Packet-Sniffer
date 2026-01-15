@@ -8,3 +8,10 @@ build/
 *.pcap
 *.txt
 *.csv
+.vs/
+bin/
+obj/
+*.user
+*.suo
+*.exe
+*.pdb
