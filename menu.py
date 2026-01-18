@@ -1,6 +1,8 @@
 import sniffer
 import os
 
+packet_sniffer = sniffer.PacketSniffer()
+
 def main_menu():
     
     def clear_terminal():
