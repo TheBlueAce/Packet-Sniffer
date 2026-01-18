@@ -7,6 +7,10 @@ import time
 import threading
 import os
 import csv
+import sys
+import socket
+import queue
+import argparse
 
 class PacketSniffer:
     
@@ -43,6 +47,9 @@ class PacketSniffer:
         self._stop_event = None      # threading.Event used to signal threads (animation) to stop
         self._prev_file = None       # Path to the most recently created log file
         self._csv_writer = None      # csv.writer instance used when logging to CSV
+        self.dns_cache = {}             # Stores names of host names we already came across, IP : hostname
+        self.dns_queue = queue.Queue()  # Queue to resolve IP lookups
+        self.cache_lock = threading.Lock() # kinda like Mutex
         
     # HANDLING PACKETS AND INFORMATION - SECTION 1
     
@@ -146,6 +153,7 @@ class PacketSniffer:
             # a little complicated here so comments for myself
             if ip_info:
                 src_ip, dst_ip, src_port, dst_port, ip_proto = ip_info
+                hostname = self.get_hostname(dst_ip)
                 
                 # this part was cuz ip protocol num might be a str or int cuz scapy is weird
                 if isinstance(ip_proto, str):
@@ -166,7 +174,7 @@ class PacketSniffer:
                 src_repr = f"{src_ip}:{src_port}" if src_port is not None else src_ip
                 dst_repr = f"{dst_ip}:{dst_port}" if dst_port is not None else dst_ip
                 
-                ip_data = f"[{timestamp}] IP Info | Proto = {proto_display}, SRC = {src_repr} -> DST = {dst_repr}"
+                ip_data = f"[{timestamp}] IP Info | Hostname = {hostname}, Proto = {proto_display}, SRC = {src_repr} -> DST = {dst_repr}"
             else:
                 src_ip = dst_ip = src_port = dst_port = ip_proto = None
             
@@ -204,6 +212,7 @@ class PacketSniffer:
                         src_port,
                         dst_ip,
                         dst_port,
+                        hostname,
                         src_mac,
                         dst_mac,
                         ether_proto
@@ -266,7 +275,14 @@ class PacketSniffer:
         if not track:
             return
         
-        base_dir = os.path.dirname(__file__)
+        # Check if we are a compiled EXE
+        if getattr(sys, "frozen", False):
+            # If .exe: use the folder where the .exe is located
+            base_dir = os.path.dirname(sys.executable)
+        else:
+            # If script: use the folder where the .py file is located
+            base_dir = os.path.dirname(__file__)
+        
         full_file = os.path.join(base_dir, f"{self.file_name}{self.ext}")
         
         file_instances = 1
@@ -282,7 +298,7 @@ class PacketSniffer:
             self._csv_writer = csv.writer(self._pcap_file)
             self._csv_writer.writerow([
                 "Timestamp", "Protocol", "Source IP", "Source Port",
-                "Destination IP", "Destination Port", "Source MAC", 
+                "Destination IP",  "Destination Port", "Hostname", "Source MAC", 
                 "Destination MAC", "EtherType"
             ])
         elif self.ext == ".pcap":
@@ -328,7 +344,56 @@ class PacketSniffer:
             
             self._stop_event.wait(timeout=1)
 
-    # PACKET SNIFFER - SECTION 3
+    # HOST-NAME FINDER - SECTION 3
+    
+    def dns_worker(self):
+        """
+        Summary: Processes queue of IP lookups, tries to understand what IPs belong to what host
+        
+        Args: None
+        
+        Returns: N/A
+        """
+        while True:
+            try:
+                ip_to_resolve = self.dns_queue.get()
+                
+                # make sure we don't overlap in editing the cache
+                with self.cache_lock:
+                    if ip_to_resolve in self.dns_cache:
+                        self.dns_queue.task_done()
+                        continue
+                    
+                try:
+                    hostname, _ = socket.getnameinfo((ip_to_resolve, 0), 0)
+                except:
+                    hostname = "N/A"
+
+                with self.cache_lock:
+                    self.dns_cache[ip_to_resolve] = hostname
+                    
+            # don't kill thread; to be used for other lookups
+            except Exception:
+                pass
+    def get_hostname(self, ip_addr):
+        """
+        Summary: Resolves the hostname if it's in the cache, otherwise puts it in queue to be solved
+        
+        Args:
+            ip_addr (string): IP Address
+            
+        Returns: Name of hostname if available, "Unknown" if none
+            
+        """
+        with self.cache_lock:
+            if ip_addr in self.dns_cache:
+                return self.dns_cache[ip_addr]
+    
+        self.dns_queue.put(ip_addr)
+        
+        return "Unknown"
+
+    # PACKET SNIFFER - SECTION 4
 
     def start(self):
         """
@@ -345,6 +410,11 @@ class PacketSniffer:
         self.enable_logging(self.packet_logging)
         start_time = time.monotonic()
 
+        # creates 150 threads 0_0
+        for _ in range(150):
+            t = threading.Thread(target=self.dns_worker, daemon=True)
+            t.start()
+        
         try:
             self._stop_event = threading.Event()
             animation = threading.Thread(target=self.listening_animation)
@@ -355,7 +425,6 @@ class PacketSniffer:
             # prn = pkt, basically the packet passes into process packet then it gets "digested"
             # count = how many packets you want
             # timeout = the actual supported timeout function by scapy
-            # 
             
             packets = sniff(prn=lambda pkt: self.process_packet(pkt, track=self.packet_logging, printing = self.terminal_logging),
                             count=self.count,
@@ -375,22 +444,54 @@ class PacketSniffer:
             if animation.is_alive():
                 animation.join()
             
-            # just adding the final line in a .csv if it is a .csv file, idk where else to place it
-            if self.ext == ".csv" and self._pcap_file is not None:
-                try:
-                    self._csv_writer.writerow([])
-                    self._csv_writer.writerow(["Summary", f"Total Packets: {self._packet_count}"])
-                    self._pcap_file.flush()
-                except Exception as e:
-                    print(f"Error: could not write summary row ({e})")
-                    
-            self.close_log()
+            
             
             end_time = time.monotonic()
             elapsed_time = end_time - start_time
             
-            print("\rListening Done!        ")
+            # just adding the final line in a .csv if it is a .csv file, idk where else to place it
+            if self.ext == ".csv" and self._pcap_file is not None:
+                try:
+                    self._csv_writer.writerow([])
+                    self._csv_writer.writerow(["Summary", f"Total Packets: {self._packet_count} | Total Duration: {elapsed_time}"])
+                    self._pcap_file.flush()
+                except Exception as e:
+                    print(f"Error: could not write summary row ({e})")
+            
+            if self.terminal_logging:
+                # If we were scrolling text, just print a clean new line
+                print("\nListening Done!")
+            else:
+                # If we were animating dots, overwrite them with \r
+                print("\rListening Done!            ")
+                
+            self.close_log()
+            
             print("Results this session...")
             print(f"{self._packets_sniffed} sniffed, {self._packet_count} packets successfully collected after {elapsed_time:.2f}s!")
             
             self._packet_count = 0 # For if the user wanted to run the packet sniffer again
+    
+# For GUI use later I thinks        
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser(description="Packet Sniffer Engine")
+    
+    parser.add_argument("--duration", type = int, default = 0, help = "Sniffing duration in seconds (0 for infinite)")
+    parser.add_argument("--count", type = int, default = 0, help = "Number of packets to capture")
+    parser.add_argument("--filter", type = str, default = None, help = "BPF Filter string (e.g. 'tcp port 80')")
+    parser.add_argument("--filename", type = str, default = "packet_capture", help = "Output filename base")
+    parser.add_argument("--format", type = str, default = ".csv", help="Output format (.txt, .csv, .pcap)")
+    
+    args = parser.parse_args()
+    
+    sniffer = PacketSniffer(
+        count=args.count,
+        duration=args.duration,
+        packet_logging=True,
+        terminal_logging=True,
+        file_name=args.filename,
+        ext=args.format,
+        filter_str=args.filter
+    )
+    
+    sniffer.start()

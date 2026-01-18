@@ -4,3 +4,10 @@ __pycache__
 *.pcap
 *.txt
 *.csv
+.vs/
+bin/
+obj/
+*.user
+*.suo
+*.exe
+*.pdb
