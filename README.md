@@ -1,20 +1,48 @@
+# Packet Sniffer Pro
 
-# Packet-Sniffer
+A cross-platform network traffic analyzer. 
+Built with a **C# (Avalonia UI)** frontend and a **Python (Scapy)** engine.
 
-Packet Sniffer that can be run in terminal easily. Compatible with .pcap and .csv formats!
+## Prerequisite Windows !
+**You MUST have [Npcap](https://npcap.com/#download) installed.**
+* During installation, check the box: **"Install Npcap in WinPcap API-compatible Mode"**.
+* Without this driver, the app cannot see network traffic.
 
-Works with Wireshark, Excel, and Splunk. More tools that support .pcap, .csv, and .txt formats accepted (I hope)!
+---
 
-### To start the program, run menu.py.
+## Dev Mode (If you just wanna run it or Tinker with it)
 
-You can edit some of the variables as you like within the menu.
-By default, the packet sniffer runs for ~10s, exact timing is not implemented, but I did my best.
+If you want to modify the code + run the app, follow these steps.
 
-If you set the packet sniffer to run infinitely, to stop it, use...<br>
-&emsp;*Windows + Linux*: Ctrl + "C"<br>
-&emsp;*Mac*: Command + "."<br>
-Planning on adding...<br>
-&emsp;- Graphic User Interface<br>
-&emsp;- An actual name instead of just "Packet Sniffer"<br>
+### 1. Python Setup (The Engine)
+The C# app relies on a backend Python script. You need to set up the environment so `python` commands have the required libraries (Scapy).
 
-Thanks for reading, hope you enjoy! If you find any bugs, please let me know. FYI My machine is Windows so idk how it works on Mac.
+# 1. Navigate to the root folder
+cd Packet-Sniffer
+
+# 2. Create a virtual environment
+python -m venv .venv
+
+# 3. Activate the environment
+# Windows (Command Prompt):
+.venv\Scripts\activate.bat
+# Windows (PowerShell):
+.venv\Scripts\Activate.ps1
+# Mac/Linux (Not too sure if it works yet for yall):
+source .venv/bin/activate
+
+# 4. Install dependencies
+pip install -r requirements.txt
+
+# 5. Compile
+"pyinstaller --noconfirm --clean --onedir --name sniffer_engine sniffer_gui.py"
+
+# 6. Follow the instructions inside the README.md 
+Make sure that sniffer_engine.exe is inside engine folder AND _internal is inside it with all the contents
+
+# 7. Run the GUI
+(Optional) You can run the python.exe to test if it works ".\engine\sniffer_engine.exe --duration 3 --count 5"
+dotnet build
+dotnet run
+
+Whazam
