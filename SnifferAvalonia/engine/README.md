@@ -14,7 +14,7 @@ If you are a developer and want to build the engine yourself:
 4. Move the resulting `.exe` from `dist/` into this folder (`SnifferAvalonia/engine/`).
 
 In the end, it should look like:<br>
-&emsp;\engine
-&emsp;&emsp;\_internal
-&emsp;&emsp;README.md
-&emsp;&emsp;sniffer_engine.exe
+&emsp;\engine<br>
+&emsp;&emsp;\_internal<br>
+&emsp;&emsp;README.md<br>
+&emsp;&emsp;sniffer_engine.exe<br>
