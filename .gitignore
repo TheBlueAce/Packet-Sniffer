@@ -4,6 +4,7 @@ __pycache__/
 *.pyc
 *.pyo
 *.pyd
+*.py[cod]
 .pytest_cache/
 .mypy_cache/
 build/
@@ -17,12 +18,15 @@ obj/
 *.sln.docstates
 .idea/
 .vscode/
+.vs/
+*.pdb
 .DS_Store
 Thumbs.db
 *.pcap
 *.csv
 *.txt
 *.log
+/data/
 SnifferAvalonia/engine/*
 !SnifferAvalonia/engine/README.md
 !requirements.txt

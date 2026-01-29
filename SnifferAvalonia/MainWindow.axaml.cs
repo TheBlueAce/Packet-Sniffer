@@ -67,7 +67,7 @@ public partial class MainWindow : Window
     }
 
     // START BUTTON
-    public async void OnStartClick(object sender, RoutedEventArgs e)
+    public void OnStartClick(object sender, RoutedEventArgs e)
     {
         if (_snifferProcess != null && !_snifferProcess.HasExited)
         {
@@ -80,153 +80,113 @@ public partial class MainWindow : Window
 
         _totalPackets = 0;
         _runTimer.Reset();
-
-        // don't start yet; wait for file to be created/first packet
-        SummaryText.Text = "Status: Waiting for first packet...";
+        _runTimer.Start();
         _packetBuffer.Clear();
-        _uiUpdateTimer.Start(); 
+        _uiUpdateTimer.Start();
 
-        // PREPARE ARGUMENTS
-        string filter = FilterBox.Text ?? ""; 
-
-        string duration = string.IsNullOrWhiteSpace(DurationBox.Text) ? "0" : DurationBox.Text;
-        string count = string.IsNullOrWhiteSpace(CountBox.Text) ? "0" : CountBox.Text;
-
-        if (!int.TryParse(duration, out _) || !int.TryParse(count, out _))
+        string baseDir = AppDomain.CurrentDomain.BaseDirectory;
+        string engineExe = Path.Combine(baseDir, "engine", "sniffer_gui.exe");
+        
+        string scriptPath = Path.Combine(Directory.GetCurrentDirectory(), "sniffer_gui.py");
+        if (!File.Exists(scriptPath)) 
         {
-            PacketList.Items.Add("[ERROR] Duration and Count must be numeric values.");
-            SummaryText.Text = "Invalid input for duration or count.";
-            return;
-        }
-        string fileName = FileNameBox.Text ?? "capture";
-        var selectedItem = FormatBox.SelectedItem as ComboBoxItem;
-        string extension = selectedItem?.Content?.ToString() ?? ".csv";
-        bool saveToFile = SaveToFileBox.IsChecked ?? false;
-        string filterArg = string.IsNullOrWhiteSpace(filter) ? "" : $"--filter \"{filter}\" ";
-        string baseDir = AppContext.BaseDirectory; // where the app is running from (bin\Debug\net9.0\ etc.)
-        string enginePath = Path.Combine(baseDir, "engine", "sniffer_engine.exe");
-        string? outFilePath = null;
-
-        if (saveToFile)
-        {
-            var sp = this.StorageProvider;
-
-            var fileType = new FilePickerFileType("Capture")
-            {
-                Patterns = new[] { $"*{extension}" }
-            };
-
-            var saveResult = await sp.SaveFilePickerAsync(new FilePickerSaveOptions
-            {
-                Title = "Save capture as",
-                SuggestedFileName = $"{fileName}{extension}",
-                FileTypeChoices = new[] { fileType },
-                DefaultExtension = extension.TrimStart('.')
-            });
-
-            if (saveResult is null)
-            {
-                // User cancelled save dialog
-                PacketList.Items.Add("[INFO] Save cancelled.");
-                StopAndFinalize();
-                return;
-            }
-
-            outFilePath = saveResult.Path.LocalPath;
+             scriptPath = Path.Combine(baseDir, "..", "sniffer_gui.py"); 
         }
 
-        string arguments;
-
-        if (saveToFile && !string.IsNullOrWhiteSpace(outFilePath))
+        ProcessStartInfo startInfo;
+        bool isLinux = System.Runtime.InteropServices.RuntimeInformation.IsOSPlatform(System.Runtime.InteropServices.OSPlatform.Linux);
+        
+        if (File.Exists(engineExe) && !isLinux)
         {
-            // outfile is full path including extension
-            arguments = $"{filterArg}--duration {duration} --count {count} --outfile \"{outFilePath}\" --save";
+             PacketList.Items.Add($"Mode: Production (Windows Engine)");
+             string args = BuildArguments(); 
+             startInfo = CreateProcessInfo(engineExe, args, Path.GetDirectoryName(engineExe) ?? baseDir);
+        }
+        // The Raw Python Script (Docker / Linux / Mac)
+        else if (File.Exists(scriptPath))
+        {
+             PacketList.Items.Add($"Mode: Container/Dev (Python Script)");
+             string pythonName = isLinux ? "python3" : "python";
+             
+             string args = $"\"{scriptPath}\" " + BuildArguments();
+             startInfo = CreateProcessInfo(pythonName, args, Path.GetDirectoryName(scriptPath) ?? baseDir);
         }
         else
         {
-            arguments = $"{filterArg}--duration {duration} --count {count}";
+             PacketList.Items.Add("[CRITICAL ERROR] No engine found!");
+             PacketList.Items.Add($"Checked: {engineExe}");
+             PacketList.Items.Add($"Checked: {scriptPath}");
+             StopAndFinalize();
+             return;
         }
-
-
-        if (!File.Exists(enginePath))
-        {
-            PacketList.Items.Add($"[CRITICAL ERROR] Engine not found: {enginePath}");
-            SummaryText.Text = "Engine missing.";
-            StopAndFinalize();
-            return;
-        }
-
-        ProcessStartInfo startInfo = new ProcessStartInfo
-        {
-            FileName = enginePath,
-            Arguments = arguments,
-            RedirectStandardOutput = true,
-            RedirectStandardError = true,
-            RedirectStandardInput = true,
-            UseShellExecute = false,
-            CreateNoWindow = true,
-            WorkingDirectory = Path.GetDirectoryName(enginePath) ?? baseDir
-        };
 
         try
         {
             _snifferProcess = new Process { StartInfo = startInfo };
-
-            _snifferProcess.OutputDataReceived += (sender, args) =>
+            
+            _snifferProcess.OutputDataReceived += (sender, args) => 
             {
-                if (!string.IsNullOrEmpty(args.Data))
-                {
+                 if (!string.IsNullOrEmpty(args.Data)) {
                     string line = args.Data.Trim();
-
-                    if (line.StartsWith("[FILE]"))
-                    {
-                        Dispatcher.UIThread.InvokeAsync(() =>
-                        {
-                            // Show save location clearly for the user
-                            PacketList.Items.Add(line);
-                            SummaryText.Text = line.Replace("[FILE]", "Saved to:").Trim();
-                        });
-                    }
-                    else if (line.StartsWith("[SUMMARY]"))
-                    {
-                        Dispatcher.UIThread.InvokeAsync(() =>
-                        {
+                    if (line.StartsWith("[SUMMARY]")) {
+                        Dispatcher.UIThread.InvokeAsync(() => {
                             StopAndFinalize();
                             string cleanSummary = line.Replace("[SUMMARY]", "").Trim();
                             SummaryText.Text = $"Done! {cleanSummary}";
                             PacketList.Items.Add("--------------------------------");
-                            PacketList.Items.Add("CAPTURE COMPLETE!");
+                            PacketList.Items.Add("CAPTURE COMPLETE.");
                         });
-                    }
-                    else if (line != "")
-                    {
+                    } else if (line != "") {
                         _packetBuffer.Enqueue(line);
                     }
-
-                }
+                 }
             };
             
-            _snifferProcess.ErrorDataReceived += (sender, args) =>
+            _snifferProcess.ErrorDataReceived += (sender, args) => 
             {
-                if (!string.IsNullOrEmpty(args.Data))
-                {
-                    Dispatcher.UIThread.InvokeAsync(() => 
-                        PacketList.Items.Add($"[PYTHON ERROR] {args.Data}"));
-                }
+                if (!string.IsNullOrEmpty(args.Data)) Dispatcher.UIThread.InvokeAsync(() => PacketList.Items.Add($"[STDERR] {args.Data}"));
             };
 
             _snifferProcess.Start();
             _snifferProcess.BeginOutputReadLine();
             _snifferProcess.BeginErrorReadLine();
-
             PacketList.Items.Add("[SUCCESS] Engine Started.");
         }
         catch (Exception ex)
         {
             StopAndFinalize();
-            PacketList.Items.Add($"[CRITICAL ERROR] Failed to launch: {ex.Message}");
-            SummaryText.Text = "Error launching sniffer.";
+            PacketList.Items.Add($"[CRITICAL ERROR] Launch failed: {ex.Message}");
         }
+    }
+
+    // --- HELPER 1: Build Arguments String ---
+    private string BuildArguments()
+    {
+        string filter = FilterBox.Text ?? ""; 
+        string duration = DurationBox.Text ?? "0";
+        string count = CountBox.Text ?? "0";
+        string fileName = FileNameBox.Text ?? "capture";
+        var selectedItem = FormatBox.SelectedItem as ComboBoxItem;
+        string extension = selectedItem?.Content?.ToString() ?? ".csv";
+        bool saveToFile = SaveToFileBox.IsChecked ?? false;
+        string saveArg = saveToFile ? "--save" : "";
+
+        return $"--filter \"{filter}\" --duration {duration} --count {count} --filename \"{fileName}\" --format \"{extension}\" {saveArg}";
+    }
+
+    private ProcessStartInfo CreateProcessInfo(string fileName, string args, string workingDir)
+    {
+        return new ProcessStartInfo
+        {
+            FileName = fileName, 
+            Arguments = args,
+            RedirectStandardOutput = true,
+            RedirectStandardError = true,
+            RedirectStandardInput = true, 
+            UseShellExecute = false,
+            CreateNoWindow = true,
+            WorkingDirectory = workingDir 
+        };
     }
 
     // STOP BUTTON

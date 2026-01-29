@@ -1,0 +1,13 @@
+**/bin/
+**/obj/
+**/__pycache__/
+**/*.pyc
+.vscode/
+.idea/
+.vs/
+*.user
+.git/
+SnifferAvalonia/engine/
+*.pcap
+*.csv
+*.txt

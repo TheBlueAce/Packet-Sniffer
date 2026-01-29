@@ -33,6 +33,7 @@
 
         <!-- Separator Line -->
         <Style Selector="ListBoxItem">
+            <Setter Property="Foreground" Value="White"/>
             <Setter Property="BorderBrush" Value="#333333"/>
             <Setter Property="BorderThickness" Value="0,0,0,1"/>
             <Setter Property="Padding" Value="10,5"/>

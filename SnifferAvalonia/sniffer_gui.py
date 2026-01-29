@@ -1,3 +1,6 @@
+import logging
+logging.getLogger("scapy.runtime").setLevel(logging.ERROR)
+
 from scapy.all import Ether, IP, IPv6, TCP, UDP, sniff
 from scapy.utils import PcapWriter
 from scapy.layers.inet import TCP, UDP, ICMP 
@@ -224,9 +227,9 @@ class PacketSniffer:
     
     def print_data(self, ethernet_data, ip_data):
         if ip_data:
-            print(ip_data)
+            print(ip_data, flush=True)
         elif ethernet_data:
-            print(ethernet_data)
+            print(ethernet_data, flush=True)
     
     def _dedupe_path(self, full_file: str):
         if not os.path.exists(full_file):
