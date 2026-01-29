@@ -409,7 +409,8 @@ class PacketSniffer:
         
         self.enable_logging(self.packet_logging)
         start_time = time.monotonic()
-
+        self._first_packet_time = None
+        
         # creates 150 threads 0_0
         for _ in range(150):
             t = threading.Thread(target=self.dns_worker, daemon=True)

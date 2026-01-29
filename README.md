@@ -1,31 +1,25 @@
+# Packet Sniffer Pro
 
+A cross-platform network traffic analyzer that took longer than it should have :.)
+Built with a **C# (Avalonia UI)** frontend and a **Python (Scapy)** backend.
 
-# Packet-Sniffer
+## Features
+* **Real-Time Monitoring:** View packet headers, protocols (TCP, UDP, ICMP, etc.), and IPs.
+* **Cross-Platform:** Runs seamlessly on Windows, Linux, and macOS via Docker.
+* **File Logging:** Save captures to `.csv`, `.txt`, or `.pcap` for analysis in Splunk/Excel/Wireshark.
+* **Filtering:** Apply BPF filters (e.g., `tcp port 80`) to isolate traffic.
 
-Packet Sniffer that can be run in terminal easily. Compatible with .txt, .pcap, and .csv formats!
+## Docker Mode (Recommended for Devs)
+This is the safest way to run the application in Development Mode or on non-Windows systems. It ensures all dependencies (Python, Scapy, Drivers) are pre-installed in an isolated container.
 
-Works with Wireshark, Excel, and Splunk. More tools that support .pcap, .csv, and .txt formats accepted (I hope)!
+ **[Click here for the Docker Setup Guide](DOCKER_README.md)**
 
-### To start the program, run menu.py OR sniffer.py
-For menu.py
-&emsp;- You still need to download sniffer.py <br>
-&emsp;- Run it, it has everything...did not test for bugs though to be honest...<br>
-For sniffer.py
-&emsp;- Running it with arguments in CLI works so...<br>
-&emsp;- "--duration" (int) = How long in seconds to run <br>
-&emsp;- "--count" (int) = How many packets do you want to capture <br>
-&emsp;- "--filter" (str) = BPF Filter string (e.g. 'tcp port 80') <br>
-&emsp;- "--filename" (str) = Name of file that info will be stored in<br>
-&emsp;- "--format" (str) = File format <br>
-Heres an example for Filtering for traffic on Port 80, running for 60s or capturing 5k packets, file name is going to be test, and will be a pcap file:
-python sniffer.py --filter "port 80" --duration 60 --count 5000 --filename "test" --format ".pcap"<br>
-*You can check the code for their default values too!*
+*(Includes instructions for Windows, Linux, and macOS saving paths)*
 
-If you set the packet sniffer to run infinitely, in Terminal, to stop it, use...<br>
-&emsp;*Windows + Linux*: Ctrl + "C"<br>
-&emsp;*Mac*: Command + "."<br>
-Planning on adding...<br>
-&emsp;- Graphic User Interface compatible on all platforms (Avalonia UI coming soon)<br>
-&emsp;- An actual name instead of just "Packet Sniffer"<br>
+---
 
-Thanks for reading, hope you enjoy! If you find any bugs, please let me know. FYI My machine is Windows so idk how it works on Mac.
+## Coming Soon: Windows Native Release
+The fully compiled, standalone Windows version (`.exe`) is currently in the final stages of packaging. It will require no Docker or Python installationjust download and run. Unfortunately, this is only for a Windows machine so MacOS and Linux users will need to use the Docker version to run this project--so if you fall under that category, consider this the final release (if it does work). This will finally mark the end of the long-awaited final release of the project (for the 0 people who anticipated the release).
+
+##  Bug Reports
+If you encounter any issues with the Docker build or the packet analysis, please open an Issue in this repository!
