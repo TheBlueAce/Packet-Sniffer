@@ -1,3 +1,19 @@
+
+# Packet Sniffer Pro - Docker Edition
+
+This guide explains how to run the Packet Sniffer in Docker container.
+
+## Prereqs
+1.  **Docker Desktop** installed and running.
+2.  **VcXsrv (XLaunch)** installed (Required to see the GUI on Windows).
+
+## Setup (Do this once)
+1.  **Build the Image:**
+    Open your terminal in the project folder and run:
+    ```powershell
+    docker build -t packet-sniffer-pro .
+    ```
+
 # Packet Sniffer Pro - Docker Edition
 
 This guide explains how to run the Packet Sniffer in Docker container.
@@ -29,6 +45,24 @@ Run **XLaunch** and use these EXACT settings:
 Paste this command into PowerShell:
 ```powershell
 docker run -it --rm --net=host --privileged -e DISPLAY=host.docker.internal:0.0 -v ${PWD}:/data packet-sniffer-pro
+```
+To see the window, you must start the X-Server first.
+
+
+### 1. Start XLaunch
+Run **XLaunch** and use these EXACT settings:
+* **Display Settings:** Multiple windows (Next)
+* **Client Startup:** Start no client (Next)
+* **Extra Settings:**
+    * Native opengl (**UNCHECK THIS** - Fixes disappearing buttons)
+    * Disable access control (**CHECK THIS** - Required)
+* **Finish**
+
+### 2. Run the Container
+Paste this command into PowerShell:
+```powershell
+docker run -it --rm --net=host --privileged -e DISPLAY=host.docker.internal:0.0 -v ${PWD}:/data packet-sniffer-pro
+```
 
 ---
  
