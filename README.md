@@ -18,8 +18,11 @@ This is the safest way to run the application in Development Mode or on non-Wind
 
 ---
 
-## Coming Soon: Windows Native Release
-The fully compiled, standalone Windows version (`.exe`) is currently in the final stages of packaging. It will require no Docker or Python installationjust download and run. Unfortunately, this is only for a Windows machine so MacOS and Linux users will need to use the Docker version to run this project--so if you fall under that category, consider this the final release (if it does work). This will finally mark the end of the long-awaited final release of the project (for the 0 people who anticipated the release).
+## Windows Native Release
+**[Download the latest Windows Release (.zip)](https://github.com/TheBlueAce/Packet-Sniffer/releases/latest)**
+1.  **Download** and unzip the file.
+2.  **Install** [Npcap](https://npcap.com/) (Required driver).
+3.  **Run** `SnifferAvalonia.exe`.
 
 ##  Bug Reports
 If you encounter any issues with the Docker build or the packet analysis, please open an Issue in this repository!
